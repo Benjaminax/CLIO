@@ -10725,3 +10725,341 @@ html.dark .scope button {
 html.dark :focus-visible {
   outline-color: #f0f0f2 !important;
 }
+
+/* ==========================================================================
+   AI CHAT & CLIO INTELLIGENCE DARK MODE COMPREHENSIVE OVERRIDES
+   ========================================================================== */
+
+/* ── Chat Shell & Layout ── */
+html.dark .ask-page,
+body.dark .ask-page {
+  background: transparent !important;
+}
+
+html.dark .chat-shell,
+body.dark .chat-shell {
+  background: #0b0c10 !important;
+  border: 1px solid #23252f !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45) !important;
+}
+
+html.dark .chat-history,
+body.dark .chat-history {
+  background: #0e0f14 !important;
+  border-right: 1px solid #23252f !important;
+}
+
+html.dark .chat-history .eyebrow,
+body.dark .chat-history .eyebrow {
+  color: #8b8e96 !important;
+}
+
+html.dark .chat-history button,
+body.dark .chat-history button {
+  background: transparent !important;
+  color: #c2c5ce !important;
+}
+
+html.dark .chat-history button:hover,
+body.dark .chat-history button:hover {
+  background: #191b23 !important;
+  color: #ffffff !important;
+}
+
+html.dark .chat-history button.active,
+body.dark .chat-history button.active {
+  background: #1c1e28 !important;
+  border: 1px solid #323545 !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3) !important;
+}
+
+html.dark .chat-history button small,
+body.dark .chat-history button small {
+  color: #7c808a !important;
+}
+
+html.dark .chat-main,
+body.dark .chat-main {
+  background: #0b0c10 !important;
+}
+
+/* ── Empty State / Prompts ── */
+html.dark .ask-empty h2,
+body.dark .ask-empty h2 {
+  color: #ffffff !important;
+}
+
+html.dark .ask-empty > p,
+body.dark .ask-empty > p {
+  color: #9da1ad !important;
+}
+
+html.dark .ai-mark,
+body.dark .ai-mark {
+  background: #1c1e28 !important;
+  color: #60a5fa !important;
+  border: 1px solid #2e3446 !important;
+}
+
+html.dark .prompt-grid button,
+body.dark .prompt-grid button {
+  background: #121319 !important;
+  border: 1px solid #262935 !important;
+  color: #e2e4ea !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+}
+
+html.dark .prompt-grid button:hover,
+body.dark .prompt-grid button:hover {
+  background: #1a1c26 !important;
+  border-color: #3e4254 !important;
+  color: #ffffff !important;
+}
+
+html.dark .prompt-grid button svg,
+body.dark .prompt-grid button svg {
+  color: #60a5fa !important;
+}
+
+/* ── Compare Documents Widget ── */
+html.dark .compare-documents,
+body.dark .compare-documents {
+  background: #111218 !important;
+  border: 1px solid #252835 !important;
+  color: #e2e4ea !important;
+}
+
+html.dark .compare-documents > div b,
+body.dark .compare-documents > div b {
+  color: #ffffff !important;
+}
+
+html.dark .compare-documents > div small,
+body.dark .compare-documents > div small {
+  color: #9da1ad !important;
+}
+
+html.dark .compare-documents select,
+body.dark .compare-documents select {
+  background: #181922 !important;
+  border: 1px solid #303444 !important;
+  color: #ffffff !important;
+}
+
+html.dark .compare-documents .primary,
+body.dark .compare-documents .primary {
+  background: #2563eb !important;
+  border: 1px solid #3b82f6 !important;
+  color: #ffffff !important;
+}
+
+html.dark .compare-documents .primary:hover,
+body.dark .compare-documents .primary:hover {
+  background: #1d4ed8 !important;
+  border-color: #2563eb !important;
+}
+
+html.dark .compare-documents .primary:disabled,
+body.dark .compare-documents .primary:disabled {
+  background: #1a1d28 !important;
+  border-color: #2b3040 !important;
+  color: #5d6274 !important;
+  opacity: 0.65 !important;
+}
+
+/* ── Messages & AI Answers ── */
+html.dark .user-message,
+body.dark .user-message {
+  background: #1e293b !important;
+  border: 1px solid #334155 !important;
+  color: #f8fafc !important;
+}
+
+html.dark .ai-answer,
+body.dark .ai-answer {
+  color: #e2e4ea !important;
+}
+
+html.dark .ai-markdown,
+body.dark .ai-markdown {
+  color: #e2e4ea !important;
+}
+
+html.dark .ai-markdown p,
+body.dark .ai-markdown p,
+html.dark .ai-markdown li,
+body.dark .ai-markdown li,
+html.dark .ai-markdown span,
+body.dark .ai-markdown span {
+  color: #d1d5db !important;
+}
+
+html.dark .ai-markdown h1,
+body.dark .ai-markdown h1,
+html.dark .ai-markdown h2,
+body.dark .ai-markdown h2,
+html.dark .ai-markdown h3,
+body.dark .ai-markdown h3,
+html.dark .ai-markdown h4,
+body.dark .ai-markdown h4 {
+  color: #ffffff !important;
+}
+
+html.dark .ai-markdown strong,
+body.dark .ai-markdown strong {
+  color: #ffffff !important;
+}
+
+html.dark .ai-markdown a,
+body.dark .ai-markdown a {
+  color: #60a5fa !important;
+}
+
+html.dark .ai-markdown blockquote,
+body.dark .ai-markdown blockquote {
+  border-left: 3px solid #3b82f6 !important;
+  background: rgba(59, 130, 246, 0.08) !important;
+  color: #cbd5e1 !important;
+  padding: 8px 14px !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+html.dark .ai-markdown code,
+body.dark .ai-markdown code {
+  background: #181a24 !important;
+  border: 1px solid #2c3042 !important;
+  color: #93c5fd !important;
+}
+
+html.dark .ai-markdown pre,
+body.dark .ai-markdown pre {
+  background: #0d0e14 !important;
+  border: 1px solid #242735 !important;
+  color: #e2e4ea !important;
+}
+
+html.dark .ai-markdown pre code,
+body.dark .ai-markdown pre code {
+  background: transparent !important;
+  border: 0 !important;
+  color: #e2e4ea !important;
+}
+
+html.dark .ai-markdown hr,
+body.dark .ai-markdown hr {
+  border-top: 1px solid #262935 !important;
+}
+
+html.dark .ai-markdown th,
+body.dark .ai-markdown th {
+  background: #161822 !important;
+  border: 1px solid #2b2f40 !important;
+  color: #ffffff !important;
+}
+
+html.dark .ai-markdown td,
+body.dark .ai-markdown td {
+  border: 1px solid #232635 !important;
+  color: #d1d5db !important;
+}
+
+/* ── Citations & Actions ── */
+html.dark .citations button,
+body.dark .citations button {
+  background: #13151d !important;
+  border: 1px solid #282c3b !important;
+  color: #c2c5ce !important;
+}
+
+html.dark .citations button:hover,
+body.dark .citations button:hover {
+  background: #1c1f2b !important;
+  border-color: #3b4256 !important;
+  color: #ffffff !important;
+}
+
+html.dark .citations b,
+body.dark .citations b {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+html.dark .answer-actions button,
+body.dark .answer-actions button {
+  color: #9da1ad !important;
+}
+
+html.dark .answer-actions button:hover,
+body.dark .answer-actions button:hover {
+  color: #ffffff !important;
+  background: #1a1c26 !important;
+  border-radius: 6px !important;
+}
+
+/* ── Composer / Input Box ── */
+html.dark .composer > div:not(.scope),
+body.dark .composer > div:not(.scope) {
+  background: #121319 !important;
+  border: 1px solid #2a2d3b !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5) !important;
+}
+
+html.dark .composer input,
+body.dark .composer input {
+  background: transparent !important;
+  border: 0 !important;
+  color: #ffffff !important;
+}
+
+html.dark .composer input::placeholder,
+body.dark .composer input::placeholder {
+  color: #6c707d !important;
+}
+
+html.dark .composer .send,
+body.dark .composer .send {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: 0 !important;
+}
+
+html.dark .composer .send:hover,
+body.dark .composer .send:hover {
+  background: #1d4ed8 !important;
+}
+
+html.dark .composer .send:disabled,
+body.dark .composer .send:disabled {
+  background: #1d1f29 !important;
+  color: #555866 !important;
+}
+
+html.dark .composer > small,
+body.dark .composer > small {
+  color: #6c707d !important;
+}
+
+html.dark .scope button,
+body.dark .scope button {
+  color: #9da1ad !important;
+}
+
+html.dark .scope button:hover,
+body.dark .scope button:hover {
+  color: #ffffff !important;
+}
+
+/* ── Floating AI Button ── */
+html.dark .floating-ai-button,
+body.dark .floating-ai-button {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: 1px solid #3b82f6 !important;
+  box-shadow: 0 4px 20px rgba(37, 99, 235, 0.45) !important;
+}
+
+html.dark .floating-ai-button:hover,
+body.dark .floating-ai-button:hover {
+  background: #1d4ed8 !important;
+}

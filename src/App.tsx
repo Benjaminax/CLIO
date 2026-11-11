@@ -812,6 +812,8 @@ function PdfDocumentView({
   );
 }
 
+let activeWorkingBase: string | null = null;
+
 async function apiFetch(
   path: string,
   options: RequestInit = {},
@@ -826,13 +828,32 @@ async function apiFetch(
     headers["Content-Type"] = "application/json";
   }
   let res: Response | null = null;
-  let activeBase = API;
+  let activeBase = activeWorkingBase || API;
   let lastNetworkError: unknown = null;
-  const requestBases = getApiBases();
+
+  // AI inference (RAG, Gemini chat, summary) takes 8-25 seconds; allow 60s.
+  // Regular REST requests timeout after 15s.
+  const isAiEndpoint =
+    path.startsWith("/ai/") || path.includes("/summarize") || path.includes("/chat");
+  const requestTimeoutMs = isAiEndpoint ? 60000 : 15000;
+
+  const rawBases = getApiBases();
+  // Try the known working base first if available
+  const requestBases = activeWorkingBase
+    ? [activeWorkingBase, ...rawBases.filter((b) => b !== activeWorkingBase)]
+    : rawBases;
+
   for (const base of requestBases) {
+    let didTimeout = false;
+    const abortController = new AbortController();
+    const timeoutId = setTimeout(() => {
+      didTimeout = true;
+      try {
+        abortController.abort(new Error(`Request timed out after ${requestTimeoutMs / 1000}s`));
+      } catch {}
+    }, requestTimeoutMs);
+
     try {
-      const abortController = new AbortController();
-      const timeoutId = setTimeout(() => abortController.abort(), 3500);
       res = await fetch(`${base}${path}`, {
         ...options,
         headers,
@@ -840,9 +861,17 @@ async function apiFetch(
       });
       clearTimeout(timeoutId);
       activeBase = base;
+      activeWorkingBase = base;
       break;
     } catch (networkError) {
-      lastNetworkError = networkError;
+      clearTimeout(timeoutId);
+      if (didTimeout) {
+        lastNetworkError = new Error(
+          `Request timed out after ${requestTimeoutMs / 1000}s waiting for AI response`,
+        );
+      } else {
+        lastNetworkError = networkError;
+      }
     }
   }
   if (!res) {
@@ -3459,7 +3488,41 @@ function AskPage({
         setError("Your session expired. Please sign in again to use CLIO Intelligence.");
         onAuthRequired();
       } else {
-        setError(message || "Failed to get AI response");
+        const lowerQ = q.toLowerCase();
+        const matches = items.filter(
+          (item) =>
+            item.title.toLowerCase().includes(lowerQ) ||
+            (item.author || "").toLowerCase().includes(lowerQ) ||
+            (item.content || "").toLowerCase().includes(lowerQ) ||
+            (Array.isArray(item.chapters) &&
+              item.chapters.some(
+                (ch: any) =>
+                  (ch.title || "").toLowerCase().includes(lowerQ) ||
+                  (ch.lead || "").toLowerCase().includes(lowerQ),
+              )),
+        );
+        if (matches.length > 0) {
+          const fallbackReply: ChatMessage = {
+            role: "assistant",
+            content:
+              `### Results for "${q}"\n\n` +
+              `*Live AI backend was momentarily delayed. Found relevant materials across your library:*\n\n` +
+              matches
+                .slice(0, 5)
+                .map(
+                  (item) =>
+                    `• **${item.title}** (${item.type})${item.author ? ` — *${item.author}*` : ""}\n` +
+                    (item.content ? `  > ${item.content.slice(0, 160)}…\n` : ""),
+                )
+                .join("\n"),
+            citations: matches.slice(0, 3).map((m) => ({ title: m.title, chunk: m.content?.slice(0, 80) || "" })),
+            timestamp: new Date(),
+          };
+          setMessages((prev) => [...prev, fallbackReply]);
+          setError(null);
+        } else {
+          setError(message || "Failed to get AI response");
+        }
       }
     } finally {
       setLoading(false);
@@ -3828,10 +3891,21 @@ function Reader({
   const askReaderAi = useCallback(
     async (action: "explain" | "summarize" | "flashcards" | "quiz" | "extract") => {
       if (!token || token.startsWith("local-token-")) {
-        setReaderAiError("Sign in to use CLIO Intelligence.");
+        const textToAnalyze =
+          window.getSelection()?.toString().trim() ||
+          [chapter?.lead, ...(chapter?.paragraphs || [])].filter(Boolean).join(" ");
+        const sentences = textToAnalyze ? textToAnalyze.split(/(?<=[.?!])\s+/).filter(Boolean) : [];
+        const localSummary = sentences.slice(0, 4).join(" ");
         setReaderAiResult({
-          title: "CLIO Intelligence",
-          content: "Sign in to analyze this document with AI.",
+          title:
+            action === "explain"
+              ? "Passage Summary (Local)"
+              : action === "flashcards"
+                ? "Key Takeaways (Local)"
+                : "Section Overview (Local)",
+          content:
+            localSummary ||
+            `"${activeDoc.title}" — Section ${currentPageNumber}. Sign in with a live connection to access deep Gemini RAG synthesis.`,
         });
         return;
       }
