@@ -220,11 +220,15 @@ const configuredAndroidApi = normalizeApiOrigin(import.meta.env.VITE_ANDROID_API
 const apiBaseStorageKey = "clio_api_url";
 function getApiBases(): string[] {
   const savedApi = normalizeApiOrigin(localStorage.getItem(apiBaseStorageKey) || "");
+  const currentHost = typeof window !== "undefined" && window.location?.hostname ? `http://${window.location.hostname}:8000` : "";
   return [
     savedApi,
     configuredApi,
     configuredAndroidApi,
-    ...(isAndroidApp ? ["http://10.0.2.2:8000"] : ["http://localhost:8000"]),
+    currentHost,
+    ...(isAndroidApp
+      ? ["http://10.0.2.2:8000", "http://172.16.228.72:8000", "http://localhost:8000"]
+      : ["http://localhost:8000", "http://127.0.0.1:8000", "http://172.16.228.72:8000"]),
   ]
     .filter(Boolean)
     .map((base) => `${base}/api/v1`)
@@ -827,7 +831,14 @@ async function apiFetch(
   const requestBases = getApiBases();
   for (const base of requestBases) {
     try {
-      res = await fetch(`${base}${path}`, { ...options, headers });
+      const abortController = new AbortController();
+      const timeoutId = setTimeout(() => abortController.abort(), 3500);
+      res = await fetch(`${base}${path}`, {
+        ...options,
+        headers,
+        signal: options.signal || abortController.signal,
+      });
+      clearTimeout(timeoutId);
       activeBase = base;
       break;
     } catch (networkError) {
@@ -1453,33 +1464,26 @@ function AuthModal({
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [canOfflineFallback, setCanOfflineFallback] = useState(false);
-
-  const handleOfflineLogin = () => {
-    const localToken = `local-token-${Date.now()}`;
-    const localUser: User = {
-      id: `local-user-${Date.now()}`,
-      email: email.trim() || "user@clio.local",
-      full_name: fullName.trim() || email.split("@")[0] || "CLIO User",
-      username: username.trim() || email.split("@")[0] || "clio_reader",
-    };
-    onAuth(localToken, localUser);
-  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setCanOfflineFallback(false);
     setLoading(true);
+
+    const cleanEmail = email.trim();
+    const cleanUsername = username.trim() || cleanEmail.split("@")[0] || "reader";
+    const cleanFullName = fullName.trim() || cleanUsername;
+
+    let specificBackendError: string | null = null;
     try {
       if (mode === "register") {
         const response = await apiFetch("/auth/register", {
           method: "POST",
           body: JSON.stringify({
-            email: email.trim(),
-            username: username.trim(),
+            email: cleanEmail,
+            username: cleanUsername,
             password,
-            full_name: fullName.trim(),
+            full_name: cleanFullName,
           }),
         });
         const result = response.data || response;
@@ -1489,8 +1493,8 @@ function AuthModal({
             {
               id: String(result.user.id),
               email: result.user.email,
-              full_name: result.user.full_name || fullName.trim(),
-              username: result.user.username || username.trim(),
+              full_name: result.user.full_name || cleanFullName,
+              username: result.user.username || cleanUsername,
               avatar_url: result.user.avatar_url,
             },
             result.refresh_token,
@@ -1501,7 +1505,7 @@ function AuthModal({
       } else {
         const response = await apiFetch("/auth/login", {
           method: "POST",
-          body: JSON.stringify({ email: email.trim(), password }),
+          body: JSON.stringify({ email: cleanEmail, password }),
         });
         const result = response.data || response;
         if (result.access_token && result.user?.id) {
@@ -1521,23 +1525,36 @@ function AuthModal({
         throw new Error("Login succeeded but did not return authentication tokens.");
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Authentication failed.";
-      if (
-        msg.includes("Unable to connect to CLIO API") ||
+      const msg = err instanceof Error ? err.message : String(err || "");
+      const isNetworkIssue =
+        msg.includes("Unable to connect") ||
         msg.includes("Failed to fetch") ||
         msg.includes("Network error") ||
-        msg.includes("unreachable")
-      ) {
-        setError(
-          "Unable to connect to CLIO API server. Please check that your backend is running at http://localhost:8000, or tap below to continue in offline mode.",
-        );
-        setCanOfflineFallback(true);
-      } else {
-        setError(msg);
+        msg.includes("unreachable") ||
+        msg.includes("aborted") ||
+        msg.includes("Load failed");
+
+      if (!isNetworkIssue) {
+        specificBackendError = msg;
       }
-    } finally {
-      setLoading(false);
     }
+
+    if (specificBackendError) {
+      setError(specificBackendError);
+      setLoading(false);
+      return;
+    }
+
+    // Seamless offline workspace activation if network is temporarily unavailable
+    const localToken = `local-token-${Date.now()}`;
+    const localUser: User = {
+      id: `local-user-${Date.now()}`,
+      email: cleanEmail || "user@clio.local",
+      full_name: cleanFullName || "CLIO User",
+      username: cleanUsername,
+    };
+    onAuth(localToken, localUser);
+    setLoading(false);
   };
 
   return (
@@ -1631,26 +1648,10 @@ function AuthModal({
             onClick={() => {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
-              setCanOfflineFallback(false);
             }}
           >
             {mode === "login" ? "Create a new account" : "Already have an account? Sign in"}
           </button>
-          {canOfflineFallback && (
-            <button
-              type="button"
-              className="secondary"
-              style={{
-                marginTop: 6,
-                borderStyle: "dashed",
-                borderColor: "#60a5fa",
-                color: "#2563eb",
-              }}
-              onClick={handleOfflineLogin}
-            >
-              Continue in Offline Demo Mode
-            </button>
-          )}
         </form>
       </div>
     </div>
@@ -3382,9 +3383,38 @@ function AskPage({
       return;
     }
     if (token.startsWith("local-token-")) {
-      setError(
-        "CLIO Intelligence requires a running backend server. Start the backend or configure your API URL in Settings.",
+      // Offline: do a simple keyword search across local library items instead
+      const lowerQ = q.toLowerCase();
+      const matches = items.filter(
+        (item) =>
+          item.title.toLowerCase().includes(lowerQ) ||
+          (item.author || "").toLowerCase().includes(lowerQ) ||
+          (item.content || "").toLowerCase().includes(lowerQ) ||
+          (Array.isArray(item.chapters) &&
+            item.chapters.some(
+              (ch: any) =>
+                (ch.title || "").toLowerCase().includes(lowerQ) ||
+                (ch.lead || "").toLowerCase().includes(lowerQ),
+            )),
       );
+      setInput("");
+      setError(null);
+      const userMsg: ChatMessage = { role: "user", content: q, timestamp: new Date() };
+      const aiReply: ChatMessage = {
+        role: "assistant",
+        content:
+          matches.length > 0
+            ? `Found ${matches.length} item${matches.length === 1 ? "" : "s"} in your local library matching "${q}":\n\n` +
+              matches
+                .slice(0, 5)
+                .map((item) => `• **${item.title}** (${item.type})${item.author ? ` by ${item.author}` : ""}`)
+                .join("\n") +
+              (matches.length > 5 ? `\n…and ${matches.length - 5} more.` : "") +
+              "\n\n> _Connect to the backend to use full CLIO Intelligence AI features._"
+            : `No items in your local library match "${q}".\n\n> _CLIO Intelligence AI features require a backend connection. You are currently in local workspace mode._`,
+        timestamp: new Date(),
+      };
+      setMessages((prev) => [...prev, userMsg, aiReply]);
       return;
     }
 
@@ -7782,6 +7812,15 @@ function CollectionsPage({
 
   const refresh = async () => {
     if (!token) return;
+    if (token.startsWith("local-token-")) {
+      // Load from localStorage for offline / local workspace mode
+      try {
+        const saved = localStorage.getItem("clio_local_collections");
+        const parsed = saved ? JSON.parse(saved) : [];
+        setCollections(Array.isArray(parsed) ? parsed : []);
+      } catch {}
+      return;
+    }
     try {
       const data = await apiFetch("/collections", {}, token);
       setCollections(data);
@@ -7820,22 +7859,42 @@ function CollectionsPage({
     setBusy(true);
     setError("");
     try {
-      if (editingId) {
+      if (token?.startsWith("local-token-")) {
+        // Local-only save
+        const updated = editingId
+          ? collections.map((c) => (c.id === editingId ? { ...c, name: name.trim() } : c))
+          : [
+              ...collections,
+              {
+                id: `local-col-${Date.now()}`,
+                name: name.trim(),
+                description: "",
+                item_count: 0,
+              },
+            ];
+        setCollections(updated);
+        localStorage.setItem("clio_local_collections", JSON.stringify(updated));
+        setName("");
+        setEditingId(null);
+      } else if (editingId) {
         await apiFetch(
           `/collections/${editingId}`,
           { method: "PATCH", body: JSON.stringify({ name: name.trim() }) },
           token,
         );
+        setName("");
+        setEditingId(null);
+        await refresh();
       } else {
         await apiFetch(
           "/collections",
           { method: "POST", body: JSON.stringify({ name: name.trim() }) },
           token,
         );
+        setName("");
+        setEditingId(null);
+        await refresh();
       }
-      setName("");
-      setEditingId(null);
-      await refresh();
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -10266,9 +10325,15 @@ const secondaryNavItems: { name: Page; icon: any }[] = [
 function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
-      return localStorage.getItem("clio_theme") !== "light";
+      const dark = localStorage.getItem("clio_theme") !== "light";
+      // Apply immediately to avoid flash
+      document.documentElement.classList.toggle("dark", dark);
+      document.body.classList.toggle("dark", dark);
+      return dark;
     } catch (error) {
       console.warn("Unable to read saved appearance preference:", error);
+      document.documentElement.classList.add("dark");
+      document.body.classList.add("dark");
       return true;
     }
   });
@@ -10282,6 +10347,7 @@ function App() {
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
+    document.body.classList.toggle("dark", isDarkMode);
     try {
       localStorage.setItem("clio_theme", isDarkMode ? "dark" : "light");
     } catch (error) {

@@ -10439,3 +10439,289 @@ html.dark .home-download-item > svg,
 body.dark .home-download-item > svg {
   color: #9da1ad !important;
 }
+
+/* ==========================================================================
+   DARK MODE COMPREHENSIVE FIXES — appended 2026-11-11
+   These rules duplicate/extend body.dark rules with html.dark selectors
+   to ensure they fire regardless of which element gets the .dark class.
+   ========================================================================== */
+
+/* ── Global .primary / .secondary buttons in dark mode ── */
+html.dark .home-command-primary,
+html.dark .primary,
+html.dark .user-message,
+html.dark .ai-mark,
+html.dark .round-btn,
+html.dark .note-save-btn {
+  background: #f0f0f2 !important;
+  border-color: #f0f0f2 !important;
+  color: #111216 !important;
+}
+html.dark .secondary,
+html.dark .select-btn,
+html.dark .filter-pills button,
+html.dark .view-toggle,
+html.dark .sign-in-button,
+html.dark .import-close-button,
+html.dark .note-cancel-btn {
+  background: #0b0b0d !important;
+  color: #e7e7ea !important;
+  border-color: #363940 !important;
+}
+html.dark .secondary:hover,
+html.dark .select-btn:hover {
+  background: #23262c !important;
+  border-color: #454951 !important;
+}
+
+/* Profile save btn — override the global .primary to be blue */
+html.dark .profile-save-btn,
+body.dark .profile-save-btn {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #3b82f6 !important;
+}
+html.dark .profile-save-btn:hover,
+body.dark .profile-save-btn:hover {
+  background: #1d4ed8 !important;
+  border-color: #2563eb !important;
+}
+html.dark .profile-save-btn svg,
+html.dark .profile-save-btn span,
+body.dark .profile-save-btn svg,
+body.dark .profile-save-btn span {
+  color: #ffffff !important;
+}
+
+/* ── email-pill meta pill ── */
+html.dark .profile-meta-pill.email-pill,
+body.dark .profile-meta-pill.email-pill {
+  background: rgba(99, 102, 241, 0.12) !important;
+  border-color: rgba(99, 102, 241, 0.28) !important;
+  color: #a5b4fc !important;
+}
+
+/* ── All inputs / textarea / select in dark mode ── */
+html.dark input,
+html.dark textarea,
+html.dark select {
+  background: #202329 !important;
+  color: #e7e7ea !important;
+  border-color: #3a3d45 !important;
+}
+html.dark input::placeholder,
+html.dark textarea::placeholder {
+  color: #777b84 !important;
+}
+
+/* ── App shell ── */
+html.dark .app {
+  background: #000 !important;
+  color: #e7e7ea !important;
+}
+html.dark .topbar {
+  background: rgba(0, 0, 0, 0.94) !important;
+  border-color: #292b30 !important;
+}
+
+/* ── Cards / surfaces ── */
+html.dark .header-search,
+html.dark .ask-bar,
+html.dark .field-search,
+html.dark .composer > div:not(.scope),
+html.dark .drop-zone,
+html.dark .modal,
+html.dark .auth-modal,
+html.dark .settings-section-card,
+html.dark .api-connection,
+html.dark .chat-shell,
+html.dark .library-file-card,
+html.dark .quick-card,
+html.dark .home-command-card,
+html.dark .home-downloads details,
+html.dark .continue-card,
+html.dark .dashboard-split .section,
+html.dark .streak {
+  background: #0b0b0d !important;
+  border-color: #2d3036 !important;
+  color: #e7e7ea !important;
+}
+html.dark .icon-btn:hover,
+html.dark .quick-card:hover,
+html.dark .home-command-card:hover,
+html.dark .drop-zone:hover {
+  background: #23262c !important;
+  border-color: #454951 !important;
+}
+
+/* ── Drawer ── */
+html.dark .drawer-backdrop {
+  background: rgba(0, 0, 0, 0.65) !important;
+}
+html.dark .drawer,
+html.dark .search-modal,
+html.dark .search-content,
+html.dark .search-modal footer,
+html.dark .import-page,
+html.dark .import-page .import-modal {
+  background: #050506 !important;
+  color: #e7e7ea !important;
+  border-color: #2d3036 !important;
+}
+
+/* ── Import modal drop zone (button element, highest specificity) ── */
+html.dark body #root .app .import-page button.drop-zone,
+html.dark body #root .app .import-page button.modal-drop,
+html.dark body #root .app button.drop-zone,
+html.dark body #root .app button.modal-drop {
+  background: #111216 !important;
+  border: 2px dashed #3a3d48 !important;
+  color: #9da1ad !important;
+  box-shadow: none !important;
+}
+html.dark body #root .app .import-page button.drop-zone:hover,
+html.dark body #root .app .import-page button.modal-drop:hover,
+html.dark body #root .app .import-page button.drop-zone.drag-active,
+html.dark body #root .app .import-page button.modal-drop.drag-active {
+  background: #181a20 !important;
+  border-color: #606474 !important;
+}
+html.dark body #root .app button.drop-zone > span,
+html.dark body #root .app button.modal-drop > span {
+  background: #1a1c24 !important;
+  border: 1px solid #363944 !important;
+  color: #9da1ad !important;
+}
+html.dark body #root .app button.drop-zone h3,
+html.dark body #root .app button.modal-drop h3 {
+  color: #ffffff !important;
+}
+html.dark body #root .app button.drop-zone p,
+html.dark body #root .app button.modal-drop p {
+  color: #9da1ad !important;
+}
+html.dark body #root .app button.drop-zone small,
+html.dark body #root .app button.modal-drop small {
+  color: #6c707d !important;
+}
+
+/* ── Converter page & file preview boxes ── */
+html.dark .converter {
+  background: #0c0d10 !important;
+  border-color: #24262e !important;
+  color: #ffffff !important;
+}
+
+/* ── Open Library search button (already in html.dark above but add redundant) ── */
+html.dark .open-library-search .primary {
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border: 1px solid #3b82f6 !important;
+}
+html.dark .open-library-search .primary:hover {
+  background: #1d4ed8 !important;
+}
+html.dark .open-library-search .primary span,
+html.dark .open-library-search .primary svg {
+  color: #ffffff !important;
+}
+
+/* ── Progress / charts ── */
+html.dark .progress {
+  background: #383b42 !important;
+}
+html.dark .progress span,
+html.dark .chart > div span.active {
+  background: #f0f0f2 !important;
+}
+html.dark .chart > div span {
+  background: #484b53 !important;
+}
+
+/* ── Settings toggles ── */
+html.dark .settings-toggle {
+  background: #3a3d45 !important;
+}
+html.dark .settings-toggle.active {
+  background: #f0f0f2 !important;
+}
+html.dark .settings-toggle.active::after {
+  background: #111216 !important;
+}
+
+/* ── SubText colors ── */
+html.dark .eyebrow,
+html.dark .type,
+html.dark .continue-info small,
+html.dark .home-library-count,
+html.dark .home-download-item small,
+html.dark .home-downloads-empty,
+html.dark .sync,
+html.dark .welcome p,
+html.dark .page-heading p,
+html.dark .continue-info p,
+html.dark .library-card p,
+html.dark .section-title button,
+html.dark .stats strong span,
+html.dark .stats small,
+html.dark .chart small,
+html.dark .quick-card small,
+html.dark .home-snapshot-copy,
+html.dark .api-connection label small,
+html.dark .settings-section-card > p,
+html.dark .settings-row-item label small {
+  color: #a1a4ac !important;
+}
+
+/* ── Home command widget icon spans ── */
+html.dark .home-command-card > span,
+html.dark .quick-card > span,
+html.dark .home-download-item,
+html.dark .chat-history,
+html.dark .metadata-review,
+html.dark .preview-doc,
+html.dark .view-toggle .active {
+  background: #24272d !important;
+  color: #e7e7ea !important;
+}
+
+/* ── Streaks & section borders ── */
+html.dark .home-downloads summary,
+html.dark .page-heading,
+html.dark .stats,
+html.dark .highlights-card blockquote {
+  border-color: #2d3036 !important;
+}
+
+/* ── kbd shortcuts ── */
+html.dark kbd {
+  background: #22252a !important;
+  border-color: #383b42 !important;
+  color: #a7a9b0 !important;
+  box-shadow: 0 1px 0 #111 !important;
+}
+
+/* ── Auth form secondary button in dark ── */
+html.dark .auth-form > .secondary {
+  background: #0b0b0d !important;
+  color: #e7e7ea !important;
+  border-color: #363940 !important;
+}
+
+/* ── Narrow page / Profile page background ── */
+html.dark .narrow-page,
+body.dark .narrow-page {
+  background: transparent !important;
+}
+
+/* ── Home download items ── */
+html.dark .home-download-item > svg,
+html.dark .chat-history button,
+html.dark .scope button {
+  color: #a1a4ac !important;
+}
+
+/* ── Focus ring in dark ── */
+html.dark :focus-visible {
+  outline-color: #f0f0f2 !important;
+}
