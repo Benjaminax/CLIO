@@ -42,6 +42,7 @@ async def register(request: RegisterRequest, response: Response):
                 "full_name": user.full_name,
             },
             "access_token": result["access_token"],
+            "refresh_token": result["refresh_token"],
             "token_type": "bearer",
             "expires_in": result["expires_in"],
         },
@@ -71,6 +72,7 @@ async def login(request: LoginRequest, req: Request, response: Response):
                 "full_name": user.full_name,
             },
             "access_token": result["access_token"],
+            "refresh_token": result["refresh_token"],
             "token_type": "bearer",
             "expires_in": result["expires_in"],
         },
@@ -104,6 +106,7 @@ async def refresh_tokens(req: Request, response: Response, body: Optional[Refres
         "message": "Tokens refreshed successfully",
         "data": {
             "access_token": result["access_token"],
+            "refresh_token": result["refresh_token"],
             "token_type": "bearer",
             "expires_in": result["expires_in"],
         },

@@ -849,15 +849,23 @@ async function apiFetch(
     !token.startsWith("local-token-") &&
     path !== "/auth/refresh"
   ) {
+    const savedRefreshToken = localStorage.getItem("clio_refresh_token");
+    const refreshHeaders: Record<string, string> = { "Content-Type": "application/json" };
     const refreshResponse = await fetch(`${activeBase}/auth/refresh`, {
       method: "POST",
       credentials: "include",
-    });
-    if (refreshResponse.ok) {
-      const refreshPayload = await refreshResponse.json();
-      const refreshedToken = refreshPayload.data?.access_token || refreshPayload.access_token;
+      headers: refreshHeaders,
+      body: savedRefreshToken ? JSON.stringify({ refresh_token: savedRefreshToken }) : undefined,
+    }).catch(() => null);
+    if (refreshResponse && refreshResponse.ok) {
+      const refreshPayload = await refreshResponse.json().catch(() => null);
+      const refreshedToken = refreshPayload?.data?.access_token || refreshPayload?.access_token;
+      const nextRefreshToken = refreshPayload?.data?.refresh_token || refreshPayload?.refresh_token;
       if (refreshedToken) {
         localStorage.setItem("clio_token", refreshedToken);
+        if (nextRefreshToken) {
+          localStorage.setItem("clio_refresh_token", nextRefreshToken);
+        }
         headers["Authorization"] = `Bearer ${refreshedToken}`;
         res = await fetch(`${activeBase}${path}`, { ...options, headers });
       }
@@ -1435,7 +1443,7 @@ function AuthModal({
   onAuth,
   close,
 }: {
-  onAuth: (token: string, user: User) => void;
+  onAuth: (token: string, user: User, refreshToken?: string) => void;
   close: () => void;
 }) {
   const [mode, setMode] = useState<"login" | "register">("login");
@@ -1445,77 +1453,88 @@ function AuthModal({
   const [username, setUsername] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [canOfflineFallback, setCanOfflineFallback] = useState(false);
+
+  const handleOfflineLogin = () => {
+    const localToken = `local-token-${Date.now()}`;
+    const localUser: User = {
+      id: `local-user-${Date.now()}`,
+      email: email.trim() || "user@clio.local",
+      full_name: fullName.trim() || email.split("@")[0] || "CLIO User",
+      username: username.trim() || email.split("@")[0] || "clio_reader",
+    };
+    onAuth(localToken, localUser);
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setCanOfflineFallback(false);
     setLoading(true);
     try {
       if (mode === "register") {
-        try {
-          const response = await apiFetch("/auth/register", {
-            method: "POST",
-            body: JSON.stringify({ email, username, password, full_name: fullName }),
-          });
-          const result = response.data || response;
-          if (result.access_token && result.user?.id) {
-            onAuth(result.access_token, {
+        const response = await apiFetch("/auth/register", {
+          method: "POST",
+          body: JSON.stringify({
+            email: email.trim(),
+            username: username.trim(),
+            password,
+            full_name: fullName.trim(),
+          }),
+        });
+        const result = response.data || response;
+        if (result.access_token && result.user?.id) {
+          onAuth(
+            result.access_token,
+            {
               id: String(result.user.id),
               email: result.user.email,
-              full_name: result.user.full_name || fullName,
-              username: result.user.username || username,
+              full_name: result.user.full_name || fullName.trim(),
+              username: result.user.username || username.trim(),
               avatar_url: result.user.avatar_url,
-            });
-            return;
-          }
-        } catch (apiErr: any) {
-          if (
-            apiErr.message &&
-            !apiErr.message.includes("Failed to fetch") &&
-            !apiErr.message.includes("Network error")
-          ) {
-            throw apiErr;
-          }
+            },
+            result.refresh_token,
+          );
+          return;
         }
+        throw new Error("Registration succeeded but did not return authentication tokens.");
       } else {
-        try {
-          const response = await apiFetch("/auth/login", {
-            method: "POST",
-            body: JSON.stringify({ email, password }),
-          });
-          const result = response.data || response;
-          if (result.access_token && result.user?.id) {
-            onAuth(result.access_token, {
+        const response = await apiFetch("/auth/login", {
+          method: "POST",
+          body: JSON.stringify({ email: email.trim(), password }),
+        });
+        const result = response.data || response;
+        if (result.access_token && result.user?.id) {
+          onAuth(
+            result.access_token,
+            {
               id: String(result.user.id),
               email: result.user.email,
               full_name: result.user.full_name,
               username: result.user.username,
               avatar_url: result.user.avatar_url,
-            });
-            return;
-          }
-        } catch (apiErr: any) {
-          if (
-            apiErr.message &&
-            !apiErr.message.includes("Failed to fetch") &&
-            !apiErr.message.includes("Network error")
-          ) {
-            throw apiErr;
-          }
+            },
+            result.refresh_token,
+          );
+          return;
         }
+        throw new Error("Login succeeded but did not return authentication tokens.");
       }
-
-      // Seamless fallback for mobile network restrictions
-      const localToken = `local-token-${Date.now()}`;
-      const localUser: User = {
-        id: `local-user-${Date.now()}`,
-        email: email || "user@clio.local",
-        full_name: fullName || email.split("@")[0] || "CLIO User",
-        username: username || email.split("@")[0] || "clio_reader",
-      };
-      onAuth(localToken, localUser);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
+      const msg = err instanceof Error ? err.message : "Authentication failed.";
+      if (
+        msg.includes("Unable to connect to CLIO API") ||
+        msg.includes("Failed to fetch") ||
+        msg.includes("Network error") ||
+        msg.includes("unreachable")
+      ) {
+        setError(
+          "Unable to connect to CLIO API server. Please check that your backend is running at http://localhost:8000, or tap below to continue in offline mode.",
+        );
+        setCanOfflineFallback(true);
+      } else {
+        setError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -1612,10 +1631,26 @@ function AuthModal({
             onClick={() => {
               setMode(mode === "login" ? "register" : "login");
               setError(null);
+              setCanOfflineFallback(false);
             }}
           >
             {mode === "login" ? "Create a new account" : "Already have an account? Sign in"}
           </button>
+          {canOfflineFallback && (
+            <button
+              type="button"
+              className="secondary"
+              style={{
+                marginTop: 6,
+                borderStyle: "dashed",
+                borderColor: "#60a5fa",
+                color: "#2563eb",
+              }}
+              onClick={handleOfflineLogin}
+            >
+              Continue in Offline Demo Mode
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -3341,9 +3376,15 @@ function AskPage({
   const sendMessage = async (text?: string, libraryItemIds?: string[]) => {
     const q = (text || input).trim();
     if (!q) return;
-    if (!token || token.startsWith("local-token-")) {
-      setError("Sign in to use CLIO Intelligence.");
+    if (!token) {
+      setError("Please sign in to use CLIO Intelligence.");
       onAuthRequired();
+      return;
+    }
+    if (token.startsWith("local-token-")) {
+      setError(
+        "CLIO Intelligence requires a running backend server. Start the backend or configure your API URL in Settings.",
+      );
       return;
     }
 
@@ -10500,15 +10541,59 @@ function App() {
   }, [token]);
 
   // Auth handlers
-  const handleAuth = (tok: string, u: User) => {
+  const handleAuth = (tok: string, u: User, refreshToken?: string) => {
     setToken(tok);
     setUser(u);
     localStorage.setItem("clio_token", tok);
+    if (refreshToken) {
+      localStorage.setItem("clio_refresh_token", refreshToken);
+    }
     localStorage.setItem("clio_user", JSON.stringify(u));
     setShowAuth(false);
-    showToast(`✓ Signed in as ${u.full_name || u.email}`);
+    const isLocal = tok.startsWith("local-token-");
+    showToast(
+      isLocal
+        ? `✓ Signed in locally (Offline mode) as ${u.full_name || u.email}`
+        : `✓ Login confirmed: Connected to database as ${u.full_name || u.email}`,
+    );
     fetchLibrary(tok);
   };
+
+  // Verify session on mount with database
+  useEffect(() => {
+    if (!token || token.startsWith("local-token-")) return;
+    let active = true;
+    apiFetch("/auth/me", {}, token)
+      .then((res) => {
+        if (!active) return;
+        const profile = res.data || res;
+        if (profile?.id) {
+          const verifiedUser: User = {
+            id: String(profile.id),
+            email: profile.email,
+            full_name: profile.full_name,
+            username: profile.username,
+            avatar_url: profile.profile_image || profile.avatar_url,
+          };
+          setUser(verifiedUser);
+          localStorage.setItem("clio_user", JSON.stringify(verifiedUser));
+        }
+      })
+      .catch((err) => {
+        // If 401 and refresh also failed, session has truly expired
+        if (active && /401|unauthorized|invalid/i.test(err?.message || "")) {
+          console.warn("Session expired or invalid:", err.message);
+          localStorage.removeItem("clio_token");
+          localStorage.removeItem("clio_refresh_token");
+          setToken(null);
+          setUser(null);
+          showToast("Session expired. Please sign in again.");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [token]);
 
   const persistLocalLibrary = useCallback((nextItems: LibraryItem[]) => {
     try {
@@ -10522,6 +10607,7 @@ function App() {
     setToken(null);
     setUser(null);
     localStorage.removeItem("clio_token");
+    localStorage.removeItem("clio_refresh_token");
     localStorage.removeItem("clio_user");
     localStorage.removeItem("clio_local_library");
     setItems([]);

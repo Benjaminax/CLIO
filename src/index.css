@@ -10326,3 +10326,116 @@ html.dark .app button.drop-zone small,
 body.dark .app button.drop-zone small {
   color: #6c707d !important;
 }
+
+/* ── Library File Card & Document Icons Dark Mode ── */
+html.dark .library-file-icon,
+body.dark .library-file-icon {
+  background: #1c1e26 !important;
+  color: #e2e4ea !important;
+  border: 1px solid #2e303c !important;
+}
+html.dark .library-file-icon svg,
+body.dark .library-file-icon svg {
+  color: #e2e4ea !important;
+}
+
+html.dark .library-file-icon.cover-soft,
+body.dark .library-file-icon.cover-soft {
+  background: #24201a !important;
+  color: #d4a373 !important;
+  border: 1px solid #3d3428 !important;
+}
+html.dark .library-file-icon.cover-soft svg,
+body.dark .library-file-icon.cover-soft svg {
+  color: #d4a373 !important;
+}
+
+html.dark .library-file-icon.cover-dark,
+body.dark .library-file-icon.cover-dark {
+  background: #181920 !important;
+  color: #e2e4ea !important;
+  border: 1px solid #2e303c !important;
+}
+html.dark .library-file-icon.cover-dark svg,
+body.dark .library-file-icon.cover-dark svg {
+  color: #e2e4ea !important;
+}
+
+html.dark .library-file-icon.cover-slides,
+body.dark .library-file-icon.cover-slides {
+  background: #171d30 !important;
+  color: #93c5fd !important;
+  border: 1px solid #243054 !important;
+}
+html.dark .library-file-icon.cover-slides svg,
+body.dark .library-file-icon.cover-slides svg {
+  color: #93c5fd !important;
+}
+
+html.dark .library-file-icon.cover-grid,
+body.dark .library-file-icon.cover-grid {
+  background: #14241b !important;
+  color: #4ade80 !important;
+  border: 1px solid #1f3d2b !important;
+}
+html.dark .library-file-icon.cover-grid svg,
+body.dark .library-file-icon.cover-grid svg {
+  color: #4ade80 !important;
+}
+
+html.dark .library-file-type,
+body.dark .library-file-type {
+  background: #14161d !important;
+  border-color: #2e303c !important;
+  color: #9da1ad !important;
+}
+
+html.dark .library-file-card .more:hover,
+body.dark .library-file-card .more:hover {
+  background: #242630 !important;
+  color: #ffffff !important;
+}
+
+html.dark .mini-doc,
+body.dark .mini-doc {
+  background: #1c1e26 !important;
+  border: 1px solid #2e303c !important;
+  color: #e2e4ea !important;
+}
+html.dark .mini-doc svg,
+body.dark .mini-doc svg {
+  color: #e2e4ea !important;
+}
+
+html.dark .pdf-page-thumbnail,
+body.dark .pdf-page-thumbnail {
+  background: #1c1e26 !important;
+  border-color: #2e303c !important;
+  color: #9da1ad !important;
+}
+html.dark .pdf-page-thumbnail svg,
+body.dark .pdf-page-thumbnail svg {
+  color: #9da1ad !important;
+}
+
+html.dark .history-row > span,
+body.dark .history-row > span {
+  background: #1c1e26 !important;
+  border: 1px solid #2e303c !important;
+  color: #e2e4ea !important;
+}
+html.dark .history-row > span svg,
+body.dark .history-row > span svg {
+  color: #e2e4ea !important;
+}
+
+html.dark .home-download-item,
+body.dark .home-download-item {
+  background: #15171d !important;
+  border: 1px solid #252833 !important;
+  color: #e7e7ea !important;
+}
+html.dark .home-download-item > svg,
+body.dark .home-download-item > svg {
+  color: #9da1ad !important;
+}
