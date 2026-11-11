@@ -1,0 +1,10 @@
+{
+  "description": "Manage, read, convert, and study books and documents in one intelligent library, with AI search, connected notes, and tools for lifelong learners.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
