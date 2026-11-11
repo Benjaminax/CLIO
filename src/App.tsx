@@ -4023,9 +4023,13 @@ function Reader({
     setLoadedPositionKey("");
     const saved = getReaderPosition(activeDoc.id);
     if (saved) {
-      setCurrentChapterIndex(Math.min(saved.page - 1, Math.max(0, totalSections - 1)));
-      setPdfViewMode(saved.viewMode);
-      setPdfZoom(saved.zoom);
+      const targetPage = Math.min(Math.max(1, saved.page || 1), Math.max(1, totalSections));
+      setCurrentChapterIndex(targetPage - 1);
+      setPdfViewMode(saved.viewMode || "canvas");
+      setPdfZoom(saved.zoom || 1);
+      if (isPdf) {
+        goToPdfPage(targetPage);
+      }
       requestAnimationFrame(() => {
         if (bookPageRef.current && saved.viewMode === "text")
           bookPageRef.current.scrollTop = saved.scrollTop;
@@ -5745,9 +5749,29 @@ function Reader({
                 <div className="note-item" key={note.id}>
                   <p>{note.text}</p>
                   <div className="note-meta">
-                    <span>
-                      {note.isHighlight ? "Highlight" : "Note"} · Page {note.page} ·{" "}
-                      {note.createdAt}
+                    <span style={{ display: "inline-flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                      <b>{note.isHighlight ? "Highlight" : "Note"}</b>
+                      <span>·</span>
+                      <select
+                        className="reader-note-page-jump"
+                        value={note.page}
+                        onChange={(e) => {
+                          const targetPage = Number(e.target.value);
+                          if (isPdf && pdfViewMode === "canvas") goToPdfPage(targetPage);
+                          else setCurrentChapterIndex(targetPage - 1);
+                          triggerHaptic();
+                        }}
+                        title={`Jump straight to page ${note.page}`}
+                        aria-label={`Jump to page ${note.page}`}
+                      >
+                        <option value={note.page}>Page {note.page} ↗</option>
+                        {Array.from({ length: totalSections }, (_, i) => i + 1).map((p) => (
+                          <option key={p} value={p}>
+                            Page {p}
+                          </option>
+                        ))}
+                      </select>
+                      <span>· {note.createdAt}</span>
                     </span>
                     <button
                       className="note-delete-btn"
@@ -8355,10 +8379,12 @@ function HighlightsPage({
   items,
   token,
   onSignIn,
+  openReader,
 }: {
   items: LibraryItem[];
   token: string | null;
   onSignIn: () => void;
+  openReader?: (item: LibraryItem, initialPage?: number) => void;
 }) {
   const [highlights, setHighlights] = useState<HighlightRecord[]>([]);
   const [itemId, setItemId] = useState("");
@@ -8530,56 +8556,120 @@ function HighlightsPage({
         )}
       </section>
       <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-        {highlights.map((highlight) => (
-          <article key={highlight.id} className="settings-section-card" style={{ marginBottom: 0 }}>
-            <blockquote style={{ margin: 0, borderLeft: "3px solid #111", paddingLeft: 14 }}>
-              {highlight.highlighted_text}
-            </blockquote>
-            <small>
-              {items.find((item) => item.id === highlight.library_item_id)?.title || "Library item"}{" "}
-              · {highlight.location}
-            </small>
-            {highlight.note && <p>{highlight.note}</p>}
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                className="secondary"
-                onClick={() =>
-                  downloadQuoteImage(
-                    items.find((item) => item.id === highlight.library_item_id)?.title ||
-                      "CLIO Highlight",
-                    highlight.highlighted_text,
-                  )
-                }
-              >
-                <Share2 size={14} /> Share as image
-              </button>
-              <button
-                className="secondary"
-                onClick={() => {
-                  setEditingId(highlight.id);
-                  setText(highlight.highlighted_text);
-                  setLocation(highlight.location);
-                  setNote(highlight.note || "");
+        {highlights.map((highlight) => {
+          const targetItem = items.find((item) => item.id === highlight.library_item_id);
+          const pageMatch = highlight.location ? highlight.location.match(/\d+/) : null;
+          const highlightPage = pageMatch ? parseInt(pageMatch[0], 10) : 1;
+          const totalPages = Math.max(1, targetItem?.pdfPageCount || targetItem?.chapters?.length || 50);
+
+          return (
+            <article key={highlight.id} className="settings-section-card highlight-card-item" style={{ marginBottom: 0 }}>
+              <blockquote style={{ margin: 0, borderLeft: "3px solid #111", paddingLeft: 14 }}>
+                {highlight.highlighted_text}
+              </blockquote>
+              <div
+                className="highlight-meta-row"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  flexWrap: "wrap",
+                  marginTop: 8,
+                  marginBottom: 6,
                 }}
               >
-                Edit
-              </button>
-              <button
-                className="secondary"
-                onClick={async () => {
-                  try {
-                    await apiFetch(`/highlights/${highlight.id}`, { method: "DELETE" }, token);
-                    await refresh();
-                  } catch (e) {
-                    setError((e as Error).message);
+                <span
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 500,
+                    color: "var(--muted, #666)",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
+                  <BookOpen size={13} />
+                  {targetItem?.title || "Library item"}
+                </span>
+                <span style={{ color: "var(--muted, #999)" }}>·</span>
+
+                {/* Page number dropdown that sends user straight to that page */}
+                <div
+                  className="highlight-page-dropdown-container"
+                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                >
+                  <select
+                    className="highlight-page-dropdown"
+                    value={highlightPage}
+                    onChange={(e) => {
+                      const selectedPage = Number(e.target.value);
+                      if (targetItem && openReader) {
+                        openReader(targetItem, selectedPage);
+                      }
+                    }}
+                    title={`Jump straight to page ${highlightPage} in ${targetItem?.title || "book"}`}
+                    aria-label={`Jump straight to page ${highlightPage}`}
+                  >
+                    <option value={highlightPage}>Go to Page {highlightPage} ↗</option>
+                    {Array.from({ length: Math.min(totalPages, 150) }, (_, i) => i + 1).map((p) => (
+                      <option key={p} value={p}>
+                        Page {p}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              {highlight.note && <p style={{ margin: "4px 0 10px" }}>{highlight.note}</p>}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+                {targetItem && openReader && (
+                  <button
+                    className="primary"
+                    style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
+                    onClick={() => openReader(targetItem, highlightPage)}
+                    title={`Open ${targetItem.title} straight to Page ${highlightPage}`}
+                  >
+                    <BookOpen size={14} /> Open at Page {highlightPage}
+                  </button>
+                )}
+                <button
+                  className="secondary"
+                  onClick={() =>
+                    downloadQuoteImage(
+                      targetItem?.title || "CLIO Highlight",
+                      highlight.highlighted_text,
+                    )
                   }
-                }}
-              >
-                <Trash2 size={14} /> Delete
-              </button>
-            </div>
-          </article>
-        ))}
+                >
+                  <Share2 size={14} /> Share as image
+                </button>
+                <button
+                  className="secondary"
+                  onClick={() => {
+                    setEditingId(highlight.id);
+                    setText(highlight.highlighted_text);
+                    setLocation(highlight.location);
+                    setNote(highlight.note || "");
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  className="secondary"
+                  onClick={async () => {
+                    try {
+                      await apiFetch(`/highlights/${highlight.id}`, { method: "DELETE" }, token);
+                      await refresh();
+                    } catch (e) {
+                      setError((e as Error).message);
+                    }
+                  }}
+                >
+                  <Trash2 size={14} /> Delete
+                </button>
+              </div>
+            </article>
+          );
+        })}
         {highlights.length === 0 && <p>No highlights saved yet.</p>}
       </div>
     </main>
@@ -10794,7 +10884,20 @@ function App() {
     [items, persistLocalLibrary, token, showToast],
   );
 
-  const openReaderWithDoc = useCallback((doc?: LibraryItem) => {
+  const openReaderWithDoc = useCallback((doc?: LibraryItem, initialPage?: number) => {
+    if (doc && typeof initialPage === "number" && initialPage > 0) {
+      try {
+        localStorage.setItem(
+          `clio_reading_position_${doc.id}`,
+          JSON.stringify({
+            page: initialPage,
+            total: doc.pdfPageCount || doc.chapters?.length || 1,
+            viewMode: "canvas",
+            zoom: 1,
+          }),
+        );
+      } catch {}
+    }
     setActiveBook(doc || null);
     setReader(true);
   }, []);
@@ -11014,7 +11117,14 @@ function App() {
     if (page === "Study Workspace")
       return <StudyPage items={items} token={token} onSignIn={() => setShowAuth(true)} />;
     if (page === "Highlights" || page === "Reading Memory")
-      return <HighlightsPage items={items} token={token} onSignIn={() => setShowAuth(true)} />;
+      return (
+        <HighlightsPage
+          items={items}
+          token={token}
+          onSignIn={() => setShowAuth(true)}
+          openReader={openReaderWithDoc}
+        />
+      );
     if (page === "Knowledge Graph")
       return <KnowledgeGraphPage items={items} token={token} onSignIn={() => setShowAuth(true)} />;
     if (page === "PDF Toolkit")
