@@ -54,6 +54,10 @@ class Settings(BaseSettings):
     anthropic_api_key: Optional[str] = None
     groq_api_key: Optional[str] = None
 
+    # External integrations
+    kaggle_username: Optional[str] = None
+    kaggle_api_key: Optional[str] = None
+
     # Limits
     max_upload_size_mb: int = 500
 

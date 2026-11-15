@@ -7,11 +7,15 @@ import asyncio
 import logging
 from motor.motor_asyncio import AsyncIOMotorClient
 import pymongo
+from app.config import settings
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("clio.migrations")
 
-async def run_migration(mongodb_url: str = "mongodb://localhost:27017", db_name: str = "clio_db"):
+async def run_migration(
+    mongodb_url: str = settings.mongodb_url,
+    db_name: str = settings.mongodb_database,
+):
     client = AsyncIOMotorClient(mongodb_url)
     db = client[db_name]
 
@@ -72,7 +76,7 @@ async def run_migration(mongodb_url: str = "mongodb://localhost:27017", db_name:
 
 if __name__ == "__main__":
     import sys
-    url = sys.argv[1] if len(sys.argv) > 1 else "mongodb://localhost:27017"
-    database = sys.argv[2] if len(sys.argv) > 2 else "clio_db"
+    url = sys.argv[1] if len(sys.argv) > 1 else settings.mongodb_url
+    database = sys.argv[2] if len(sys.argv) > 2 else settings.mongodb_database
     asyncio.run(run_migration(url, database))
 

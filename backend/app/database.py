@@ -15,6 +15,7 @@ from app.models.settings import UserSettings
 from app.models.notifications import Notification
 from app.models.conversions import ConversionJob
 from app.models.presentations import Presentation
+from app.models.feature_data import CitationAudit, StudyMindMap, LatexManuscript
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ ALL_DOCUMENT_MODELS = [
     Highlight,
     Annotation,
     Presentation,
+    CitationAudit,
+    StudyMindMap,
+    LatexManuscript,
     ConversionJob,
     AIConversation,
     AIMessage,

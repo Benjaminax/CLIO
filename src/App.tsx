@@ -17,6 +17,7 @@ import {
   BookMarked,
   BookOpen,
   Bookmark,
+  Brain,
   BrainCircuit,
   Check,
   ChevronDown,
@@ -24,14 +25,17 @@ import {
   ChevronRight,
   CircleHelp,
   Clock3,
+  Code2,
   Command,
   Compass,
+  Database,
   Download,
   ExternalLink,
   Eye,
   File,
   FileArchive,
   FileChartColumn,
+  FileCheck,
   FileText,
   Folder,
   FolderPlus,
@@ -103,6 +107,12 @@ function Sparkles({
   );
 }
 
+// ─── Component Imports ────────────────────────────────────────────────────────
+import { CitationCheckerPage } from "./components/CitationCheckerPage";
+import { LatexPdfViewerPage } from "./components/LatexPdfViewerPage";
+import { AiMindMapPage } from "./components/AiMindMapPage";
+import { KaggleIntegrationPage } from "./components/KaggleIntegrationPage";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Page =
   | "Overview"
@@ -115,6 +125,10 @@ type Page =
   | "Ask Your Library"
   | "Knowledge Graph"
   | "Study Workspace"
+  | "AI Mind Map"
+  | "Citation Checker"
+  | "LaTeX & PDF Viewer"
+  | "Kaggle Integration"
   | "Highlights"
   | "Reading Memory"
   | "File Converter"
@@ -813,6 +827,46 @@ function PdfDocumentView({
 }
 
 let activeWorkingBase: string | null = null;
+let refreshInFlight: Promise<{ accessToken: string } | null> | null = null;
+
+function refreshAuthSession(base: string): Promise<{ accessToken: string } | null> {
+  if (!refreshInFlight) {
+    const request = (async () => {
+      const savedRefreshToken = localStorage.getItem("clio_refresh_token");
+      const response = await fetch(`${base}/auth/refresh`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: savedRefreshToken ? JSON.stringify({ refresh_token: savedRefreshToken }) : undefined,
+      });
+      if (!response.ok) return null;
+
+      const payload = await response.json();
+      const accessToken = payload?.data?.access_token || payload?.access_token;
+      const nextRefreshToken = payload?.data?.refresh_token || payload?.refresh_token;
+      if (typeof accessToken !== "string" || !accessToken) return null;
+
+      localStorage.setItem("clio_token", accessToken);
+      if (typeof nextRefreshToken === "string" && nextRefreshToken) {
+        localStorage.setItem("clio_refresh_token", nextRefreshToken);
+      }
+      window.dispatchEvent(
+        new CustomEvent("clio-auth-session-updated", { detail: { token: accessToken } }),
+      );
+      return { accessToken };
+    })();
+
+    refreshInFlight = request
+      .catch((error: unknown) => {
+        console.warn("Unable to refresh the CLIO session:", error);
+        return null;
+      })
+      .finally(() => {
+        refreshInFlight = null;
+      });
+  }
+  return refreshInFlight;
+}
 
 async function apiFetch(
   path: string,
@@ -831,11 +885,12 @@ async function apiFetch(
   let activeBase = activeWorkingBase || API;
   let lastNetworkError: unknown = null;
 
-  // AI inference (RAG, Gemini chat, summary) takes 8-25 seconds; allow 60s.
-  // Regular REST requests timeout after 15s.
-  const isAiEndpoint =
-    path.startsWith("/ai/") || path.includes("/summarize") || path.includes("/chat");
-  const requestTimeoutMs = isAiEndpoint ? 60000 : 15000;
+  // AI inference and batched citation lookups can take longer than regular REST requests.
+  const isLongRunningEndpoint =
+    path.startsWith("/ai/") ||
+    path.startsWith("/citation-checker/verify") ||
+    path.startsWith("/latex/");
+  const requestTimeoutMs = isLongRunningEndpoint ? 60000 : 15000;
 
   const rawBases = getApiBases();
   // Try the known working base first if available
@@ -889,26 +944,10 @@ async function apiFetch(
     !token.startsWith("local-token-") &&
     path !== "/auth/refresh"
   ) {
-    const savedRefreshToken = localStorage.getItem("clio_refresh_token");
-    const refreshHeaders: Record<string, string> = { "Content-Type": "application/json" };
-    const refreshResponse = await fetch(`${activeBase}/auth/refresh`, {
-      method: "POST",
-      credentials: "include",
-      headers: refreshHeaders,
-      body: savedRefreshToken ? JSON.stringify({ refresh_token: savedRefreshToken }) : undefined,
-    }).catch(() => null);
-    if (refreshResponse && refreshResponse.ok) {
-      const refreshPayload = await refreshResponse.json().catch(() => null);
-      const refreshedToken = refreshPayload?.data?.access_token || refreshPayload?.access_token;
-      const nextRefreshToken = refreshPayload?.data?.refresh_token || refreshPayload?.refresh_token;
-      if (refreshedToken) {
-        localStorage.setItem("clio_token", refreshedToken);
-        if (nextRefreshToken) {
-          localStorage.setItem("clio_refresh_token", nextRefreshToken);
-        }
-        headers["Authorization"] = `Bearer ${refreshedToken}`;
-        res = await fetch(`${activeBase}${path}`, { ...options, headers });
-      }
+    const refreshedSession = await refreshAuthSession(activeBase);
+    if (refreshedSession) {
+      headers["Authorization"] = `Bearer ${refreshedSession.accessToken}`;
+      res = await fetch(`${activeBase}${path}`, { ...options, headers });
     }
   }
   if (!res.ok) {
@@ -928,6 +967,7 @@ async function apiFetch(
     throw new Error(message);
   }
   if (res.status === 204) return null;
+  if (res.headers.get("content-type")?.includes("application/pdf")) return res.blob();
   return res.json();
 }
 
@@ -1696,6 +1736,8 @@ function Dashboard({
   items,
   user,
   loadingItems,
+  libraryLoadError,
+  retryLibraryLoad,
 }: {
   go: (p: Page) => void;
   openSearch: () => void;
@@ -1704,6 +1746,8 @@ function Dashboard({
   items: LibraryItem[];
   user: User | null;
   loadingItems: boolean;
+  libraryLoadError: string | null;
+  retryLibraryLoad: () => void;
 }) {
   const now = new Date();
   const dateLabel = now
@@ -1724,6 +1768,15 @@ function Dashboard({
   );
   const [monthlyGoal, setMonthlyGoal] = useState(() =>
     Math.max(1, Number(localStorage.getItem("clio_monthly_goal_pages")) || 100),
+  );
+  const [goalEditorOpen, setGoalEditorOpen] = useState(false);
+  const [goalDraft, setGoalDraft] = useState(() =>
+    String(Math.max(1, Number(localStorage.getItem("clio_monthly_goal_pages")) || 100)),
+  );
+  const [goalError, setGoalError] = useState("");
+  const [onboardingNotice, setOnboardingNotice] = useState("");
+  const [defaultReaderTheme, setDefaultReaderTheme] = useState(
+    () => localStorage.getItem("clio_reader_theme_default") || "light",
   );
   const [activity] = useState(() => {
     try {
@@ -1792,6 +1845,35 @@ function Dashboard({
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
   const completedBooks = items.filter((item) => getLibraryProgress(item) >= 100).length;
+  const openGuidedSample = () =>
+    openReader({
+      id: "clio-guided-sample",
+      title: "A short guide to active reading",
+      author: "CLIO",
+      type: "DOCX",
+      progress: 0,
+      tone: toneForType("DOCX"),
+      mark: "CLIO",
+      chapters: sampleChapters,
+      content: sampleChapters
+        .map((chapter) => [chapter.title, chapter.lead, ...chapter.paragraphs].join("\n\n"))
+        .join("\n\n"),
+    });
+  const saveMonthlyGoal = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const parsedGoal = Number(goalDraft);
+    if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) {
+      setGoalError("Enter a page goal between 1 and 10,000.");
+      return;
+    }
+    const goal = Math.max(1, Math.min(10000, Math.round(parsedGoal)));
+    setMonthlyGoal(goal);
+    setGoalDraft(String(goal));
+    localStorage.setItem("clio_monthly_goal_pages", String(goal));
+    setGoalError("");
+    setGoalEditorOpen(false);
+    setOnboardingNotice(`Your monthly reading goal is set to ${goal} pages.`);
+  };
   const homeFeatures: {
     page?: Page;
     label: string;
@@ -1963,54 +2045,47 @@ function Dashboard({
         <section className="clio-onboarding">
           <div className="clio-onboarding-copy">
             <span className="eyebrow">YOUR READING SPACE</span>
-            <h2>Make CLIO yours</h2>
+            <h2>Choose your first step</h2>
             <p>
-              Set a goal, choose a comfortable reading theme, or try a guided sample before adding
-              your own books.
+              Set up a reading goal, pick a comfortable default, or try a short sample. You can
+              change these choices later in Settings.
             </p>
+            <div className="clio-onboarding-steps" aria-label="Getting started">
+              <span><b>1</b> Add a file</span>
+              <span><b>2</b> Read and annotate</span>
+              <span><b>3</b> Explore study tools</span>
+            </div>
           </div>
           <div className="clio-onboarding-actions">
             <button
+              type="button"
+              aria-expanded={goalEditorOpen}
+              aria-controls="clio-goal-editor"
               onClick={() => {
-                const answer = window.prompt("Monthly page goal", String(monthlyGoal));
-                if (!answer) return;
-                const parsedGoal = Number(answer);
-                if (!Number.isFinite(parsedGoal) || parsedGoal <= 0) {
-                  window.alert("Enter a page goal greater than zero.");
-                  return;
-                }
-                const goal = Math.max(1, Math.min(10000, Math.round(parsedGoal)));
-                setMonthlyGoal(goal);
-                localStorage.setItem("clio_monthly_goal_pages", String(goal));
+                setGoalDraft(String(monthlyGoal));
+                setGoalError("");
+                setGoalEditorOpen((open) => !open);
               }}
             >
-              <Target size={16} /> Set reading goal
-            </button>
-            <button onClick={() => localStorage.setItem("clio_reader_theme_default", "sepia")}>
-              <Eye size={16} /> Choose sepia theme
+              <Target size={16} /> {monthlyGoal} pages / month
             </button>
             <button
-              onClick={() =>
-                openReader({
-                  id: "clio-guided-sample",
-                  title: "A short guide to active reading",
-                  author: "CLIO",
-                  type: "DOCX",
-                  progress: 0,
-                  tone: toneForType("DOCX"),
-                  mark: "CLIO",
-                  chapters: sampleChapters,
-                  content: sampleChapters
-                    .map((chapter) =>
-                      [chapter.title, chapter.lead, ...chapter.paragraphs].join("\n\n"),
-                    )
-                    .join("\n\n"),
-                })
-              }
+              type="button"
+              aria-pressed={defaultReaderTheme === "sepia"}
+              onClick={() => {
+                localStorage.setItem("clio_reader_theme_default", "sepia");
+                setDefaultReaderTheme("sepia");
+                setOnboardingNotice("Sepia is saved as your default theme for newly opened books.");
+              }}
             >
+              <Eye size={16} />
+              {defaultReaderTheme === "sepia" ? "Sepia default selected" : "Choose sepia theme"}
+            </button>
+            <button type="button" onClick={openGuidedSample}>
               <BookOpen size={16} /> Try the sample
             </button>
             <button
+              type="button"
               className="onboarding-dismiss"
               onClick={() => {
                 localStorage.setItem("clio_onboarding_complete", "true");
@@ -2020,6 +2095,32 @@ function Dashboard({
               I’ll explore on my own <ArrowRight size={14} />
             </button>
           </div>
+          {goalEditorOpen && (
+            <form
+              id="clio-goal-editor"
+              className="onboarding-goal-editor"
+              onSubmit={saveMonthlyGoal}
+            >
+              <label htmlFor="clio-monthly-goal">Monthly page goal</label>
+              <div>
+                <input
+                  id="clio-monthly-goal"
+                  type="number"
+                  min="1"
+                  max="10000"
+                  step="1"
+                  inputMode="numeric"
+                  value={goalDraft}
+                  onChange={(event) => setGoalDraft(event.target.value)}
+                  required
+                />
+                <button type="submit">Save goal</button>
+                <button type="button" onClick={() => setGoalEditorOpen(false)}>Cancel</button>
+              </div>
+              {goalError && <p role="alert">{goalError}</p>}
+            </form>
+          )}
+          {onboardingNotice && <p className="onboarding-notice" role="status">{onboardingNotice}</p>}
         </section>
       )}
 
@@ -2077,46 +2178,76 @@ function Dashboard({
           >
             <Loader2 size={18} className="spin" /> Loading your library...
           </div>
-        ) : recentItems.length === 0 ? (
-          <div className="empty-state" style={{ padding: "32px 0", textAlign: "center" }}>
-            <Upload size={32} style={{ opacity: 0.3, marginBottom: 12 }} />
-            <p style={{ color: "#888" }}>
-              Your library is empty. Import your first file to get started.
-            </p>
-            <button className="primary" onClick={openImport} style={{ marginTop: 12 }}>
-              <Upload size={15} /> Import files
+        ) : libraryLoadError && recentItems.length === 0 ? (
+          <div className="dashboard-library-error" role="alert">
+            <strong>We couldn’t load your library</strong>
+            <p>{libraryLoadError}</p>
+            <button className="secondary" onClick={retryLibraryLoad}>
+              <RotateCcw size={15} /> Try again
             </button>
           </div>
         ) : (
-          <div className="continue-grid">
-            {recentItems.map((book) => (
-              <article className="continue-card" key={book.id} onClick={() => openReader(book)}>
-                <Cover item={book} />
-                <div className="continue-info">
-                  <span className="type">{book.type}</span>
-                  <h3>{book.title}</h3>
-                  <p>{book.author}</p>
-                  {book.progress > 0 && (
-                    <div className="progress-row">
-                      <Progress value={book.progress} />
-                      <span>{book.progress}%</span>
-                    </div>
-                  )}
-                  <small>{formatRelative(book.created_at || book.uploadedAt)}</small>
+          <>
+            {libraryLoadError && (
+              <p className="dashboard-library-warning" role="status">
+                Couldn’t refresh your account library. Showing files saved on this device.
+              </p>
+            )}
+            {recentItems.length === 0 ? (
+              <div className="dashboard-empty-library">
+                <span className="dashboard-empty-icon">
+                  <Library size={23} />
+                </span>
+                <span className="eyebrow">YOUR READING SPACE IS READY</span>
+                <h3>Start with one book or document</h3>
+                <p>
+                  Import a PDF, EPUB, Word document, or text file to read, highlight, and explore it
+                  with CLIO.
+                </p>
+                <div className="dashboard-empty-actions">
+                  <button className="primary" onClick={openImport}>
+                    <Upload size={15} /> Import your first file
+                  </button>
+                  <button className="secondary" onClick={() => go("Discover Books")}>
+                    <Compass size={15} /> Explore books
+                  </button>
+                  <button className="secondary" onClick={openGuidedSample}>
+                    <BookOpen size={15} /> Open guided sample
+                  </button>
                 </div>
-                <button
-                  className="round-btn"
-                  aria-label="Resume"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openReader(book);
-                  }}
-                >
-                  <Play size={15} fill="currentColor" />
-                </button>
-              </article>
-            ))}
-          </div>
+              </div>
+            ) : (
+              <div className="continue-grid">
+                {recentItems.map((book) => (
+                  <article className="continue-card" key={book.id} onClick={() => openReader(book)}>
+                    <Cover item={book} />
+                    <div className="continue-info">
+                      <span className="type">{book.type}</span>
+                      <h3>{book.title}</h3>
+                      <p>{book.author}</p>
+                      {book.progress > 0 && (
+                        <div className="progress-row">
+                          <Progress value={book.progress} />
+                          <span>{book.progress}%</span>
+                        </div>
+                      )}
+                      <small>{formatRelative(book.created_at || book.uploadedAt)}</small>
+                    </div>
+                    <button
+                      className="round-btn"
+                      aria-label="Resume"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openReader(book);
+                      }}
+                    >
+                      <Play size={15} fill="currentColor" />
+                    </button>
+                  </article>
+                ))}
+              </div>
+            )}
+          </>
         )}
       </section>
 
@@ -2441,6 +2572,20 @@ function Dashboard({
             ],
             [ArrowLeftRight, "Convert a file", "Transform any format", () => go("File Converter")],
             [FolderPlus, "New collection", "Organise your knowledge", () => go("Collections")],
+            [Brain, "AI Mind Map", "Explore concepts from your library", () => go("AI Mind Map")],
+            [
+              FileCheck,
+              "Citation Checker",
+              "Review citations in a research paper",
+              () => go("Citation Checker"),
+            ],
+            [Code2, "LaTeX & PDF Viewer", "Edit source and read PDFs", () => go("LaTeX & PDF Viewer")],
+            [
+              Database,
+              "Kaggle Integration",
+              "Export your study data",
+              () => go("Kaggle Integration"),
+            ],
           ].map(([Icon, title, text, action]: any) => (
             <button className="quick-card" key={title} onClick={action}>
               <span>
@@ -3134,45 +3279,47 @@ function LibraryPage({
               </div>
               <div className="library-file-card-header">
                 <span className={`library-file-icon cover-${item.tone}`}>
-                  <FileText size={22} />
+                  <FileText size={20} />
                 </span>
                 <span className="library-file-type">{item.type}</span>
-                <button
-                  className={`library-icon-action${isFavorite(item) ? " selected" : ""}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleOrganizationFlag(item, "favorite");
-                  }}
-                  aria-label={isFavorite(item) ? "Remove favorite" : "Add favorite"}
-                  title="Favorite"
-                >
-                  <Star size={15} fill={isFavorite(item) ? "currentColor" : "none"} />
-                </button>
-                <button
-                  className={`library-icon-action${organization[item.id]?.pinned ? " selected" : ""}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    void toggleOrganizationFlag(item, "pinned");
-                  }}
-                  aria-label={organization[item.id]?.pinned ? "Unpin item" : "Pin item"}
-                  title="Pin"
-                >
-                  <Bookmark
-                    size={15}
-                    fill={organization[item.id]?.pinned ? "currentColor" : "none"}
-                  />
-                </button>
-                <button
-                  className="more"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete(item.id);
-                  }}
-                  title={`Delete ${item.title}`}
-                  aria-label={`Delete ${item.title}`}
-                >
-                  <Trash2 size={15} />
-                </button>
+                <div className="library-file-actions">
+                  <button
+                    className={`library-icon-action${isFavorite(item) ? " selected" : ""}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggleOrganizationFlag(item, "favorite");
+                    }}
+                    aria-label={isFavorite(item) ? "Remove favorite" : "Add favorite"}
+                    title="Favorite"
+                  >
+                    <Star size={14} fill={isFavorite(item) ? "currentColor" : "none"} />
+                  </button>
+                  <button
+                    className={`library-icon-action${organization[item.id]?.pinned ? " selected" : ""}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void toggleOrganizationFlag(item, "pinned");
+                    }}
+                    aria-label={organization[item.id]?.pinned ? "Unpin item" : "Pin item"}
+                    title="Pin"
+                  >
+                    <Bookmark
+                      size={14}
+                      fill={organization[item.id]?.pinned ? "currentColor" : "none"}
+                    />
+                  </button>
+                  <button
+                    className="more"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete(item.id);
+                    }}
+                    title={`Delete ${item.title}`}
+                    aria-label={`Delete ${item.title}`}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
               <div className="library-file-info">
                 <h3>{item.title}</h3>
@@ -10458,16 +10605,20 @@ const navGroups: { label: string; items: { name: Page; icon: any }[] }[] = [
     ],
   },
   {
-    label: "Reading",
+    label: "Reading & Research",
     items: [
       { name: "Discover Books", icon: Search },
       { name: "Ask Your Library", icon: Sparkles },
       { name: "Study Workspace", icon: BrainCircuit },
+      { name: "AI Mind Map", icon: Brain },
+      { name: "Citation Checker", icon: FileCheck },
+      { name: "LaTeX & PDF Viewer", icon: Code2 },
     ],
   },
   {
-    label: "Tools",
+    label: "Tools & Integrations",
     items: [
+      { name: "Kaggle Integration", icon: Database },
       { name: "File Converter", icon: ArrowLeftRight },
       { name: "Downloaded Files", icon: Download },
     ],
@@ -10490,24 +10641,15 @@ function App() {
   const [isDarkMode, setIsDarkMode] = useState(() => {
     try {
       const dark = localStorage.getItem("clio_theme") !== "light";
-      // Apply immediately to avoid flash
       document.documentElement.classList.toggle("dark", dark);
       document.body.classList.toggle("dark", dark);
       return dark;
-    } catch (error) {
-      console.warn("Unable to read saved appearance preference:", error);
+    } catch {
       document.documentElement.classList.add("dark");
       document.body.classList.add("dark");
       return true;
     }
   });
-  const [page, setPage] = useState<Page>("Overview");
-  const [drawer, setDrawer] = useState(false);
-  const [moreNavOpen, setMoreNavOpen] = useState(false);
-  const [search, setSearch] = useState(false);
-  const [importing, setImporting] = useState(false);
-  const [reader, setReader] = useState(false);
-  const [splash, setSplash] = useState(true);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", isDarkMode);
@@ -10515,9 +10657,17 @@ function App() {
     try {
       localStorage.setItem("clio_theme", isDarkMode ? "dark" : "light");
     } catch (error) {
-      console.error("Unable to save appearance preference:", error);
+      console.warn("Unable to save theme preference:", error);
     }
   }, [isDarkMode]);
+
+  const [page, setPage] = useState<Page>("Overview");
+  const [drawer, setDrawer] = useState(false);
+  const [moreNavOpen, setMoreNavOpen] = useState(false);
+  const [search, setSearch] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [reader, setReader] = useState(false);
+  const [splash, setSplash] = useState(true);
 
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || Capacitor.getPlatform() !== "android") return;
@@ -10605,9 +10755,75 @@ function App() {
   });
   const [showAuth, setShowAuth] = useState(false);
 
+  useEffect(() => {
+    const syncUserFromStorage = () => {
+      try {
+        const stored = localStorage.getItem("clio_user");
+        const parsed: unknown = stored ? JSON.parse(stored) : null;
+        if (
+          typeof parsed === "object" &&
+          parsed !== null &&
+          "id" in parsed &&
+          typeof parsed.id === "string" &&
+          "email" in parsed &&
+          typeof parsed.email === "string"
+        ) {
+          setUser({
+            id: parsed.id,
+            email: parsed.email,
+            full_name:
+              "full_name" in parsed && typeof parsed.full_name === "string"
+                ? parsed.full_name
+                : undefined,
+            username:
+              "username" in parsed && typeof parsed.username === "string"
+                ? parsed.username
+                : undefined,
+            avatar_url:
+              "avatar_url" in parsed && typeof parsed.avatar_url === "string"
+                ? parsed.avatar_url
+                : undefined,
+          });
+        } else {
+          setUser(null);
+        }
+      } catch (error) {
+        console.warn("Unable to synchronize the stored CLIO user:", error);
+        setUser(null);
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === "clio_token") {
+        setToken(event.key === null ? null : event.newValue);
+        if (event.key === null || !event.newValue) {
+          setUser(null);
+        } else {
+          syncUserFromStorage();
+        }
+      } else if (event.key === "clio_user") {
+        syncUserFromStorage();
+      }
+    };
+
+    const handleSessionUpdated = (event: Event) => {
+      const { token: nextToken } =
+        (event as CustomEvent<{ token?: string }>).detail ?? {};
+      if (nextToken) setToken(nextToken);
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener("clio-auth-session-updated", handleSessionUpdated);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener("clio-auth-session-updated", handleSessionUpdated);
+    };
+  }, []);
+
   // Library state — always from backend when authed, localStorage fallback
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [libraryLoadError, setLibraryLoadError] = useState<string | null>(null);
   const [activeBook, setActiveBook] = useState<LibraryItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [syncStatus, setSyncStatus] = useState(() =>
@@ -10623,15 +10839,17 @@ function App() {
 
   // Fetch library from backend
   const fetchLibrary = useCallback(async (tok: string | null) => {
+    setLibraryLoadError(null);
     if (!tok) {
-      // Load from localStorage if no token
       try {
         const saved = localStorage.getItem("clio_local_library");
-        if (saved) {
-          const parsed = JSON.parse(saved);
-          setItems(Array.isArray(parsed) ? parsed : []);
-        }
-      } catch {}
+        const parsed = saved ? JSON.parse(saved) : [];
+        setItems(Array.isArray(parsed) ? parsed : []);
+      } catch (error) {
+        console.warn("Unable to load the local library:", error);
+        setItems([]);
+        setLibraryLoadError("Unable to read the library saved on this device.");
+      }
       return;
     }
     setLoadingItems(true);
@@ -10672,12 +10890,18 @@ function App() {
       }
       const fetchedIds = new Set(fetched.map((item) => item.id));
       setItems([...localItems.filter((item) => !fetchedIds.has(item.id)), ...fetched]);
-    } catch {
-      // Fallback to localStorage
+    } catch (error) {
+      setLibraryLoadError(
+        error instanceof Error ? error.message : "Unable to connect to your account library.",
+      );
       try {
         const saved = localStorage.getItem("clio_local_library");
-        if (saved) setItems(JSON.parse(saved));
-      } catch {}
+        const parsed = saved ? JSON.parse(saved) : [];
+        setItems(Array.isArray(parsed) ? parsed : []);
+      } catch (localError) {
+        console.warn("Unable to restore the local library after a sync failure:", localError);
+        setItems([]);
+      }
     } finally {
       setLoadingItems(false);
     }
@@ -11047,6 +11271,8 @@ function App() {
           items={items}
           user={user}
           loadingItems={loadingItems}
+          libraryLoadError={libraryLoadError}
+          retryLibraryLoad={() => void fetchLibrary(token)}
         />
       );
     if (
@@ -11116,6 +11342,24 @@ function App() {
       );
     if (page === "Study Workspace")
       return <StudyPage items={items} token={token} onSignIn={() => setShowAuth(true)} />;
+    if (page === "AI Mind Map")
+      return <AiMindMapPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
+    if (page === "Citation Checker")
+      return <CitationCheckerPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
+    if (page === "LaTeX & PDF Viewer")
+      return (
+        <LatexPdfViewerPage
+          token={token}
+          user={user}
+          apiFetch={apiFetch}
+          onSignIn={() => setShowAuth(true)}
+          onSaveDownload={async (blob, name) => {
+            await saveDownloadedFile(blob, name);
+          }}
+        />
+      );
+    if (page === "Kaggle Integration")
+      return <KaggleIntegrationPage token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
     if (page === "Highlights" || page === "Reading Memory")
       return (
         <HighlightsPage
@@ -11138,6 +11382,8 @@ function App() {
         items={items}
         user={user}
         loadingItems={loadingItems}
+        libraryLoadError={libraryLoadError}
+        retryLibraryLoad={() => void fetchLibrary(token)}
       />
     );
   }, [
@@ -11146,6 +11392,8 @@ function App() {
     token,
     user,
     loadingItems,
+    libraryLoadError,
+    fetchLibrary,
     go,
     openReaderWithDoc,
     handleDeleteItem,

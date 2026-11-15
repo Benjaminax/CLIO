@@ -61,6 +61,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 ```bash
 python migrations/001_initial_indexes.py
+python migrations/002_feature_data_indexes.py
 ```
 
 ### 6. Start the Server
