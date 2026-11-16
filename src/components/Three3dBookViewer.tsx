@@ -252,11 +252,28 @@ export function Three3dBookViewer({
 }: Three3dBookViewerProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const bookGroupRef = useRef<THREE.Group | null>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
 
   const totalSpreads = 5;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const updateSceneTheme = () => {
+      if (!sceneRef.current) return;
+      sceneRef.current.background = new THREE.Color(
+        root.classList.contains("dark") ? "#09090b" : "#f1f5f9"
+      );
+    };
+
+    const observer = new MutationObserver(updateSceneTheme);
+    observer.observe(root, { attributes: true, attributeFilter: ["class"] });
+    updateSceneTheme();
+
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -269,6 +286,7 @@ export function Three3dBookViewer({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(isDark ? "#09090b" : "#f1f5f9");
+    sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(35, width / height, 0.1, 100);
     camera.position.set(0, 0.2, isFullscreen ? 3.8 : 4.5);
@@ -439,6 +457,7 @@ export function Three3dBookViewer({
         container.removeChild(renderer.domElement);
       }
       renderer.dispose();
+      sceneRef.current = null;
     };
   }, [title, author, description, currentPage, isFullscreen]);
 
@@ -461,7 +480,7 @@ export function Three3dBookViewer({
     <div
       className={`flex flex-col items-center space-y-4 w-full transition-all ${
         isFullscreen
-          ? "fixed inset-0 z-50 p-6 bg-neutral-950/95 backdrop-blur-xl overflow-y-auto"
+          ? "fixed inset-0 z-50 p-6 bg-white/95 dark:bg-neutral-950/95 text-neutral-900 dark:text-neutral-100 backdrop-blur-xl overflow-y-auto"
           : "relative"
       }`}
     >
