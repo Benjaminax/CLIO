@@ -21,7 +21,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0",
-    "remark-gfm": "^4.0.1"
+    "remark-gfm": "^4.0.1",
+    "three": "^0.166.1"
   },
   "devDependencies": {
     "@capacitor/android": "^8.6.0",
@@ -30,6 +31,7 @@
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/three": "^0.166.0",
     "@vitejs/plugin-react": "^6.0.0",
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",

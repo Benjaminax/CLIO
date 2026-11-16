@@ -39,3 +39,9 @@ backend/storage/
 .DS_Store
 Thumbs.db
 
+# Android build artifacts
+android/build_out/
+android/app/build/
+android/.gradle/
+.gradle/
+

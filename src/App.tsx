@@ -83,6 +83,7 @@ import {
   WandSparkles,
   X,
   Zap,
+  Box,
 } from "lucide-react";
 
 // ─── Hugeicons wrapper ───────────────────────────────────────────────────────
@@ -112,11 +113,14 @@ import { CitationCheckerPage } from "./components/CitationCheckerPage";
 import { LatexPdfViewerPage } from "./components/LatexPdfViewerPage";
 import { AiMindMapPage } from "./components/AiMindMapPage";
 import { KaggleIntegrationPage } from "./components/KaggleIntegrationPage";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import { Interactive3dLibraryPage } from "./components/Interactive3dLibraryPage";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 type Page =
   | "Overview"
   | "My Library"
+  | "Interactive 3D Library"
   | "Discover Books"
   | "Books"
   | "Documents"
@@ -10601,6 +10605,7 @@ const navGroups: { label: string; items: { name: Page; icon: any }[] }[] = [
     items: [
       { name: "Overview", icon: Home },
       { name: "My Library", icon: Library },
+      { name: "Interactive 3D Library", icon: Box },
       { name: "Collections", icon: Folder },
     ],
   },
@@ -11343,23 +11348,58 @@ function App() {
     if (page === "Study Workspace")
       return <StudyPage items={items} token={token} onSignIn={() => setShowAuth(true)} />;
     if (page === "AI Mind Map")
-      return <AiMindMapPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
+      return (
+        <ErrorBoundary fallbackTitle="Error in AI Mind Map">
+          <AiMindMapPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />
+        </ErrorBoundary>
+      );
     if (page === "Citation Checker")
-      return <CitationCheckerPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
+      return (
+        <ErrorBoundary fallbackTitle="Error in Citation Checker">
+          <CitationCheckerPage items={items} token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />
+        </ErrorBoundary>
+      );
     if (page === "LaTeX & PDF Viewer")
       return (
-        <LatexPdfViewerPage
-          token={token}
-          user={user}
-          apiFetch={apiFetch}
-          onSignIn={() => setShowAuth(true)}
-          onSaveDownload={async (blob, name) => {
-            await saveDownloadedFile(blob, name);
-          }}
-        />
+        <ErrorBoundary fallbackTitle="Error in LaTeX & PDF Viewer">
+          <LatexPdfViewerPage
+            token={token}
+            user={user}
+            apiFetch={apiFetch}
+            onSignIn={() => setShowAuth(true)}
+            onSaveDownload={async (blob, name) => {
+              await saveDownloadedFile(blob, name);
+            }}
+          />
+        </ErrorBoundary>
+      );
+    if (page === "Interactive 3D Library")
+      return (
+        <ErrorBoundary fallbackTitle="Error in Interactive 3D Library">
+          <Interactive3dLibraryPage
+            token={token}
+            user={user}
+            onOpenBook={(book) => {
+              const doc = items.find((i) => i.id === book.id) || {
+                id: book.id,
+                title: book.title,
+                author: book.author,
+                type: book.type,
+                tone: book.coverTone,
+                content: book.description,
+              };
+              openReaderWithDoc(doc as any);
+            }}
+            onSignIn={() => setShowAuth(true)}
+          />
+        </ErrorBoundary>
       );
     if (page === "Kaggle Integration")
-      return <KaggleIntegrationPage token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />;
+      return (
+        <ErrorBoundary fallbackTitle="Error in Kaggle Integration">
+          <KaggleIntegrationPage token={token} user={user} apiFetch={apiFetch} onSignIn={() => setShowAuth(true)} />
+        </ErrorBoundary>
+      );
     if (page === "Highlights" || page === "Reading Memory")
       return (
         <HighlightsPage
